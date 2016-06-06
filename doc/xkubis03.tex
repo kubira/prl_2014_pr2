@@ -1,0 +1,352 @@
+\documentclass[12pt,a4paper,titlepage,final]{article}
+
+% cestina a fonty
+\usepackage[czech]{babel}
+\usepackage[latin2]{inputenc}
+% balicky pro odkazy
+\usepackage[bookmarksopen,colorlinks,plainpages=false,urlcolor=blue,unicode]{hyperref}
+\usepackage{url}
+% obrazky
+\usepackage[dvipdf]{graphicx}
+% velikost stranky
+\usepackage[top=3.5cm, left=2.5cm, text={17cm, 24cm}, ignorefoot]{geometry}
+
+\usepackage{multirow}
+\usepackage{float}
+\usepackage{program}
+
+\begin{document}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% titulní strana
+
+% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+\def\authorA{Radim Kubi¹, \url{xkubis03@stud.fit.vutbr.cz}}
+\def\projname{2. projekt\\Implementace algoritmu Enumeration sort}
+% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+\input{title.tex}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% obsah
+\pagestyle{plain}
+\pagenumbering{roman}
+\setcounter{page}{1}
+\tableofcontents
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% textova zprava
+\newpage
+\pagestyle{plain}
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Zadání} \label{zadani}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Pomocí knihovny \emph{Open MPI} implementujte algoritmus \emph{Enumeration sort}
+s~lineárním polem procesorù. Vstupem je posloupnost náhodných èísel ulo¾ená
+v~binárním souboru.
+
+%-----------------------------------------------------------------------------
+\subsection*{Vstup} \label{vstup}
+%-----------------------------------------------------------------------------
+
+Soubor \emph{numbers} obsahující èísla o~velikosti 1~byte, která jsou bez mezery
+za~sebou.
+
+%-----------------------------------------------------------------------------
+\subsection*{Výstup} \label{vystup}
+%-----------------------------------------------------------------------------
+
+První øádek výstupu \emph{stdout} (konzole/terminál) obsahuje naètená
+(neseøazená) èísla posloupnosti oddìlená mezerou. Na~ka¾dém dal¹ím øádku výstupu
+\emph{stdout} (konzole/terminál) jsou pak èísla seøazené posloupnosti
+(od~nejmen¹ího po~nejvìt¹í, jedna hodnota na~øádek) s~tím, ¾e~jednotlivé hodnoty
+budou odøádkovány. Pøíklad:
+
+\begin{verbatim}
+2 4 1 6 5
+1
+2
+4
+5
+6
+\end{verbatim}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Popis algoritmu} \label{popis}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\emph{Enumeration sort} je~paralelní øadící algoritmus s~lineární architekturou,
+doplnìnou spoleènou sbìrnicí se~schopností pøenést v~ka¾dém kroku jednu
+hodnotu (obrázek \ref{schema}). V¹echny procesory architektury obsahují
+4~registry:
+
+\begin{itemize}
+\item \textbf{$C_{i}$} -- poèet prvkù men¹ích ne¾ $x_{i}$ (kolikrát byl
+$Y_{i} \leq X_{i}$),
+\item \textbf{$X_{i}$} -- prvek $x_{i}$ vstupní posloupnosti pøiøazený
+procesoru s~indexem $i$,
+\item \textbf{$Y_{i}$} -- postupnì prvky $x_{1} \dots x_{n}$ vstupní
+posloupnosti,
+\item \textbf{$Z_{i}$} -- seøazený prvek $Y_{i}$ na~konci algoritmu.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[scale=0.35]{img/es.eps}
+\caption{Schéma propojení procesorù pro algoritmus Enumeration sort.}
+\label{schema}
+\end{figure}
+
+Samotný algoritmus se~skládá ze~tøí krokù:
+
+\begin{enumerate}
+\item V¹echny registry $C_{i}$ procesorù se~nastaví na hodnotu 1.
+\item Následující èinnost se~opakuje $2n$-krát ($1 \leq k \leq 2n$):
+  \begin{itemize}
+  \item Pokud vstup není vyèerpán, vstupní prvek $x_{i}$ se~vlo¾í spoleènou
+  sbìrnicí do~$X_{i}$ a~lineárním spojením do $Y_{1}$, pøièem¾ se~obsah v¹ech
+  registrù $Y_{i}$ posune vpravo.
+  \item Ka¾dý procesor s~neprázdnými registry $X_{i}$ a $Y_{i}$ je porovná,
+  a~je-li $Y_{i} \leq X_{i}$, inkrementuje obsah registru $C_{i}$.
+  \item Je-li $k > n$ (tj.~po~vyèerpání vstupní posloupnosti), procesor
+  $P_{k-n}$ po¹le spoleènou sbìrnicí obsah svého registru $X_{i}$
+  procesoru $P_{C_{i}}$, který jej ulo¾í do svého registru $Z_{i}$.
+  \end{itemize}
+\item V~dal¹ích $n$ krocích procesory posouvají obsahy svých registrù $Z_{i}$
+vpravo a~tím procesor $P_{n}$ produkuje seøazenou vstupní posloupnost
+od~nejvìt¹ího èísla k~nejmen¹ímu.
+\end{enumerate}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Analýza algoritmu} \label{analyza}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Souhrnnou èasovou slo¾itost øadícího algoritmu \emph{Enumeration sort} tvoøí
+souèet dílèích èasových slo¾itostí jeho jednotlivých krokù. Slo¾itosti
+tìchto krokù jsou uvedeny v~tabulce~\ref{tabulkaSlozitost}.
+
+\begin{table}[H]
+\catcode`\-=12
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+{\bf Èíslo kroku} & {\bf Popis} & {\bf Slo¾itost} \\
+\hline
+1 & Nastavení registrù $C_{i}$ je~v~konstantním èase. & $O(1)$ \\
+\hline
+{\multirow{2}{*}{2}} & Distribuce vstupních hodnot, jejich porovnání a~pøenos & {\multirow{2}{*}{$O(2n)$}} \\
+
+ & seøazených èísel trvá $2n$~cyklù, tj.~lineární èasová slo¾itost. & \\
+\hline
+{\multirow{2}{*}{3}} & Posouvání seøazené posloupnosti na~výstup trvá $n$ cyklù, & {\multirow{2}{*}{$O(n)$}} \\
+ & tj.~lineární èasová slo¾itost. & \\
+\hline
+\end{tabular}
+\caption{Analýza èasové slo¾itosti jednotlivých krokù algoritmu.}
+\label{tabulkaSlozitost}
+\end{table}
+
+Výsledná èasová slo¾itost celého algoritmu je:
+
+\begin{equation}
+t(n) = O(n).
+\end{equation}
+
+Algoritmus potøebuje pro svùj bìh $n$ procesorù:
+
+\begin{equation}
+p(n) = n.
+\end{equation}
+
+Celková cena algoritmu se~získá vztahem:
+
+\begin{equation}
+c(n) = p(n) \cdot t(n),
+\end{equation}
+
+tedy pro algoritmus \emph{Enumeration sort} je celková cena algoritmu:
+
+\begin{equation}
+c(n) = O(n) \cdot n = O(n^{2}),
+\end{equation}
+
+co¾ {\bf není optimální}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Implementace} \label{implementace}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Projekt s~implementací øadícího algoritmu \emph{Enumeration sort} je~napsán
+v~jazyce~C za~pomoci knihovny \emph{Open MPI} pro~podporu paralelního øe¹ení
+výpoèetních problémù.
+
+%-----------------------------------------------------------------------------
+\subsection{Øe¹ení problému øazení stejných hodnot} \label{reseni}
+%-----------------------------------------------------------------------------
+
+Algoritmus \emph{Enumeration sort} je~schopný øadit posloupnost vstupních èísel
+pouze pokud neobsahuje více stejných hodnot. Zpùsob, jakým jsou generována
+vstupní data, ale~tuto podmínku nezaruèuje, proto bylo nutné algoritmus pro
+tento pøípad upravit.
+
+Nabízely se~dvì jednoduché metody:
+
+\begin{enumerate}
+\item Výskyt stejného èísla nahradit jiným -- o~jednièku
+men¹ím/vìt¹ím èíslem, které se~v~posloupnosti je¹tì nevyskytuje.
+\item Èíslo, které se~vyskytne vícekrát, konkatenovat napø. s~jeho poøadím
+ve~vstupní posloupnosti.
+\end{enumerate}
+
+Ani jedna ze~dvou vý¹e uvedených metod se~mi nezdála vhodná, proto¾e
+by~se~vstupní posloupnost èísel mohla výraznì zmìnit (metoda~1), resp.
+by~se~mohla zeslo¾itit práce s~takto upravenou posloupností (metoda~2).
+
+Zvolil jsem øe¹ení 3.~metodou, která nijak nemìní èísla ve~vstupní posloupnosti
+a~ani nijak výraznì nemìní prùbìh vykonávání øadícího algoritmu. Jedná
+se~o~úpravu v~místì porovnávání èísla $x_{i}$ pøiøazeného procesoru se~v¹emi
+vstupními hodnotami $x_{1} \dots x_{n}$. Jeden cyklus porovnávající hodnoty
+$x_{1} \dots x_{n}$ s~hodnotou $x_{i}$ operátorem~$>$ je~nahrazen dvìma cykly,
+kde~první porovnává hodnoty $x_{1} \dots x_{i-1}$ operátorem~$\geq$ a~druhý
+hodnoty $x_{i} \dots x_{n}$ operátorem~$>$, oba s~hodnotou $x_{i}$
+\cite{Article}.
+
+\begin{program}
+\mbox{Pùvodní algoritmus:}
+\BEGIN \\
+  C_{i}:=1
+  \FOR j:=1 \TO n \STEP 1 \DO
+    \IF x_{i} > x_{j} \THEN C_{i}:=C_{i}+1 \FI
+  \OD
+\END
+\end{program}
+
+\begin{program}
+\mbox{Upravený algoritmus:}
+\BEGIN \\
+  C_{i}:=1
+  \FOR j:=1 \TO i-1 \STEP 1 \DO
+    \IF x_{i} \geq x_{j} \THEN C_{i}:=C_{i}+1 \FI
+  \OD
+  \FOR j:=i \TO n \STEP 1 \DO
+    \IF x_{i} > x_{j} \THEN C_{i}:=C_{i}+1 \FI
+  \OD
+\END
+\end{program}
+
+%-----------------------------------------------------------------------------
+\subsection{Enumeration sort} \label{sort}
+%-----------------------------------------------------------------------------
+
+Vytvoøený program simuluje lineární pole $n$ procesorù propojených spoleènou
+sbìrnicí pomocí knihovny \emph{Open MPI}, a~proto bylo nutné implementovaný
+algoritmus mírnì upravit.
+
+Spojení lineárnì, i~pøes spoleènou sbìrnici, je~realizováno blokujícími funkcemi
+\texttt{MPI\_Send} a~\texttt{MPI\_Recv}. \texttt{MPI\_Send} umo¾òuje zaslání
+hodnoty z~jednoho procesoru do~druhého, ten v¹ak musí zasílanou hodnotu oèekávat
+a~pøevzít ji~funkcí \texttt{MPI\_Recv}.
+
+Jedním z~parametrù tìchto funkcí je i~tag, podle kterého lze urèit, zda
+je~zasílaná/pøijímaná hodnota $X_{i}$ -- tag \texttt{TAGX}, $Y_{i}$ --
+tag \texttt{TAGY} nebo~$Z_{i}$ -- tag \texttt{TAGZ}. Dále program obsahuje
+speciální tag \texttt{TAGEND} slou¾ící výhradnì pro~posouvání ji¾ seøazených
+hodnot $Z_{i}$ vpravo na~konci algoritmu.
+
+Dal¹í parametr funkcí \texttt{MPI\_Send} a~\texttt{MPI\_Recv} definuje, kterému
+procesoru hodnotu zasíláme, resp.~od~kterého hodnotu pøijímáme. Pøi~posouvání
+posloupnosti vstupních hodnot pøes procesory jsou identifikace sousedních
+procesorù pro~komunikaci jasné. Problém nastává v~posledním bodì kroku~2
+algoritmu, kdy ¾ádný z~procesorù neví, od~kterého procesoru bude pøijímat
+výslednou hodnotu seøazené posloupnosti pro~ulo¾ení do~svého registru $Z_{i}$.
+K~tomuto úèelu je vyu¾ita konstanta \texttt{MPI\_ANY\_SOURCE} umo¾òující pøijmout
+hodnotu od~jakéhokoliv procesoru.
+
+Komunikaèní protokol mezi procesory je znároznìn sekvenèním diagramem
+\ref{sekvence}.
+
+\begin{figure}[htp]
+\centering
+\includegraphics[scale=0.35]{img/sequence.eps}
+\caption{Sekvenèní diagram komunikaèního protokolu mezi procesory.}
+\label{sekvence}
+\end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Testování a~výsledky} \label{testovani}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Mìøení doby trvání algoritmu bylo provádìno funkcí \texttt{clock\_gettime}
+(z~knihovny \texttt{time.h}) s~identifikací hodin \texttt{CLOCK\_MONOTONIC},
+které nelze nastavit. Funkce vrací monotónní èas od~blí¾e neurèeného výchozího
+bodu.
+
+První èasová znaèka je~ukládána pøed rozesíláním hodnot $X_{i}$ jednotlivým
+procesorùm. Druhá èasová znaèka se~ukládá po~posunutí poslední seøazené hodnoty
+z~procesoru $P_{n}$ v~posledním kroku algoritmu. Výsledný èas délky trvání
+algoritmu je~rozdíl tìchto dvou èasových okam¾ikù.
+
+Pro rùznì dlouhé vstupní posloupnosti neseøazených èísel bylo mìøení opakováno
+v¾dy 20krát. Doba øazení ka¾dé posloupnosti je~pak~vypoèítána jako oøezaný
+aritmetický prùmìr v¹ech zmìøených èasù, kdy se~vynechává nejmen¹í a~nejvìt¹í
+hodnota.
+
+Vypoèítané hodnoty jsou uvedeny v~tabulce~\ref{tabulkaTest} a~vyneseny
+do~grafu~\ref{graf}.
+
+\begin{table}[H]
+\catcode`\-=12
+\centering
+\begin{tabular}{|rrrrrr@{}l|rrrr@{,}l|}
+\hline
+\multicolumn{7}{|c|}{\bf Poèet øazených prvkù [n]} & \multicolumn{5}{|c|}{\bf Doba øazení [ms]} \\
+\hline
+&&&&& &5 &&&& 1&315 \\
+\hline
+&&&&& 1&0 &&&& 4&408 \\
+\hline
+&&&&& 1&5 &&&& 11&746 \\
+\hline
+&&&&& 2&0 &&&& 24&255 \\
+\hline
+&&&&& 2&5 &&&& 32&049 \\
+\hline
+&&&&& 3&0 &&&& 56&852  \\
+\hline
+&&&&& 3&5 &&&& 78&350 \\
+\hline
+&&&&& 4&0 &&&& 103&964 \\
+\hline
+&&&&& 4&5 &&&& 130&411  \\
+\hline
+\end{tabular}
+\caption{Vypoèítané hodnoty dob øazení rùzných délek vstupních posloupností.}
+\label{tabulkaTest}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[scale=0.8]{img/graf.eps}
+\caption{Graf závislosti doby øazení na poètu øazených prvkù (se spojnicí trendu).}
+\label{graf}
+\end{figure}
+
+Jak lze vidìt na~grafu \ref{graf}, doba øazení vstupní posloupnosti roste
+\emph{témìø} lineárnì s~její délkou -- co¾ odpovídá teoretické èasové slo¾itosti
+øadícího algoritmu \emph{Enumeration sort}.
+
+\begin{thebibliography}{50}
+\bibitem{Article} YASUURA, Hiroto, Naofumi TAKAGI a~Shuzo YAJIMA. The Parallel
+Enumeration Sorting Scheme for VLSI. \textit{IEEE Transactions on computers.}
+New York: IEEE Computer Society, prosinec 1982, C-31, è.~12,
+s.~1192--1201. DOI:~10.1109/TC.1982.1675943. Dostupné~z:
+\url{http://origin-www.computer.org/csdl/trans/tc/1982/12/01675943.pdf}
+\end{thebibliography}
+
+\end{document}
